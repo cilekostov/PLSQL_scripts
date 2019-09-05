@@ -1,0 +1,74 @@
+create or replace procedure ile_integral(i_function       in varchar2,
+                                         i_min_limit      in number,
+                                         i_max_limit      in number,
+                                         i_percent_error  in number default 0.5,
+                                         i_decimal_places in number default 2,
+                                         o_result         out number) as
+  l_dx number;
+  --l_dx_min number;
+  --l_dx_max number;
+  l_itterations   number;
+  l_rez           number := 0;
+  l_x             number;
+  l_y             number;
+  i               number;
+  l_function_call varchar2(10000);
+  TYPE lt_rez_array is table of number;
+  l_rez_array lt_rez_array := new lt_rez_array();
+
+  l_error_percent1 number := 0;
+  l_error_percent2 number := 0;
+  l_error_percent3 number := 0;
+begin
+  l_itterations := 10000;
+
+  loop
+    l_rez := 0;
+    l_dx  := (i_max_limit - i_min_limit) / l_itterations;
+    i     := i_min_limit;
+    while i <= i_max_limit
+    loop
+      l_x             := i + (l_dx / 2);
+      l_function_call := 'select ' || i_function || '(:x) from dual';
+      execute immediate l_function_call
+        into l_y
+        using l_x;
+      l_rez := l_rez + (l_dx * l_y);
+      --dbms_output.put_line('x => ' || l_x || '; y => ' || l_y ||
+      --                   '; rez => ' || l_rez);
+      i := i + l_dx;
+    end loop;
+  
+    l_rez_array.extend();
+    l_rez_array(l_rez_array.count) := l_rez;
+    dbms_output.put_line('itr => ' || l_itterations || '; rez => ' ||
+                         l_rez);
+    if l_rez_array.count >= 4
+    then
+      if l_rez_array(l_rez_array.count) != 0
+      then
+        l_error_percent1 := 100 * abs((l_rez_array(l_rez_array.count) -
+                                      l_rez_array(l_rez_array.count - 1)) /
+                                      l_rez_array(l_rez_array.count));
+        l_error_percent2 := 100 * abs((l_rez_array(l_rez_array.count) -
+                                      l_rez_array(l_rez_array.count - 2)) /
+                                      l_rez_array(l_rez_array.count));
+        l_error_percent3 := 100 * abs((l_rez_array(l_rez_array.count) -
+                                      l_rez_array(l_rez_array.count - 3)) /
+                                      l_rez_array(l_rez_array.count));
+        dbms_output.put_line('err1 % => ' || l_error_percent1);
+        dbms_output.put_line('err2 % => ' || l_error_percent2);
+        dbms_output.put_line('err3 % => ' || l_error_percent3);
+        exit when l_error_percent1 < i_percent_error and l_error_percent2 < i_percent_error and l_error_percent3 < i_percent_error
+        --and round(l_rez_array(l_rez_array.count), i_decimal_places) = round(l_rez_array(l_rez_array.count - 1), i_decimal_places) 
+        --and round(l_rez_array(l_rez_array.count), i_decimal_places) = round(l_rez_array(l_rez_array.count - 2), i_decimal_places) 
+        --and round(l_rez_array(l_rez_array.count), i_decimal_places) = round(l_rez_array(l_rez_array.count - 3), i_decimal_places)
+        ;
+      end if;
+    end if;
+  
+    l_itterations := l_itterations * 2;
+  end loop;
+
+  o_result := l_rez_array(l_rez_array.count);
+end;
